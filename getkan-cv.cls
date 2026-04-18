@@ -1,4 +1,4 @@
-%% Start of file `awesome-cv.cls'.
+%% Start of file `getkan-cv.cls'.
 % Awesome CV Class File
 %
 % This class has been downloaded from:

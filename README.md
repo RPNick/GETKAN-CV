@@ -1,130 +1,304 @@
-<h1 align="center">
-  <a href="https://github.com/posquit0/Awesome-CV" title="AwesomeCV Documentation">
-    <img alt="AwesomeCV" src="https://github.com/posquit0/Awesome-CV/raw/master/icon.png" width="200px" height="200px" />
-  </a>
-  <br />
-  Awesome CV
-</h1>
+# GETKAN-CV
 
-<p align="center">
-  LaTeX template for your outstanding job application
-</p>
+GETKAN-CV is a Python + LaTeX resume tailoring tool.
 
-<div align="center">
-  <a href="https://www.paypal.me/posquit0">
-    <img alt="Donate" src="https://img.shields.io/badge/Donate-PayPal-blue.svg" />
-  </a>
-  <a href="https://github.com/posquit0/Awesome-CV/actions/workflows/main.yml">
-    <img alt="GitHub Actions" src="https://github.com/posquit0/Awesome-CV/actions/workflows/main.yml/badge.svg" />
-  </a>
-  <a href="https://raw.githubusercontent.com/posquit0/Awesome-CV/master/examples/resume.pdf">
-    <img alt="Example Resume" src="https://img.shields.io/badge/resume-pdf-green.svg" />
-  </a>
-  <a href="https://raw.githubusercontent.com/posquit0/Awesome-CV/master/examples/cv.pdf">
-    <img alt="Example CV" src="https://img.shields.io/badge/cv-pdf-green.svg" />
-  </a>
-  <a href="https://raw.githubusercontent.com/posquit0/Awesome-CV/master/examples/coverletter.pdf">
-    <img alt="Example Coverletter" src="https://img.shields.io/badge/coverletter-pdf-green.svg" />
-  </a>
-</div>
+It takes a job listing (URL or file), extracts structured job requirements, tailors resume modules with truth-preserving edits, and compiles a PDF resume that is constrained to one page when possible.
 
-<br />
+## What This Project Does
 
-## What is Awesome CV?
+- Parses a job listing into a normalized job packet.
+- Tailors selected resume modules (`summary.tex`, `experience.tex`, `personalprojects.tex`, `aboutme.tex`).
+- Writes generated artifacts to a dedicated output folder.
+- Compiles a LaTeX PDF using `xelatex`.
+- Supports recompiling an existing generated output after manual `.tex` edits.
 
-**Awesome CV** is LaTeX template for a **CV(Curriculum Vitae)**, **Résumé** or **Cover Letter** inspired by [Fancy CV](https://www.sharelatex.com/templates/cv-or-resume/fancy-cv). It is easy to customize your own template, especially since it is really written by a clean, semantic markup.
+## Project Structure
 
+- `src/main.py`: CLI entrypoint and workflow orchestration.
+- `src/agents/job_parser_agent.py`: Job extraction, fallback parsing, normalization, validation.
+- `src/agents/job_hunt_advisor.py`: Cross-job analysis of saved job packets with resume-based recommendation output.
+- `src/agents/resume_tailor_agent.py`: Module tailoring, one-page fit profiles, artifact writing, compile logic.
+- `src/prompts/tailor_prompts.json`: Editable prompt templates for parser and tailor behavior.
+- `resume/modules/skills.json`: Editable technical skills catalog used by tailoring allowlist prioritization.
 
-## Donate
+Skills categories in `resume/modules/skills.json` also influence bullet prioritization strength during tailoring (for example testing-focused roles prioritize testing-heavy bullets).
+- `resume/`: Source resume and base modules.
+- `output/`: Generated job-specific artifacts.
+- `tailor-resume`: Executable wrapper script.
 
-Please help keep this project alive! Donations are welcome and will go towards further development of this project.
+## LaTeX File Structure
 
-    PayPal: paypal.me/posquit0
-    BTC: 1Je3DxJVM2a9nTVPNo55SfQwpmxA6N2KKb
-    BCH: 1Mg1wG7PwHGrHYSWS67TsGSjo5GHEVbF16
-    ETH: 0x77ED9B4659F80205E9B9C9FB1E26EDB9904AFCC7
-    QTUM: QZT7D6m3QtTTqp7s4ZWAwLtGDsoHMMaM8E
+The resume is assembled from a root TeX file plus section modules.
 
-*Thank you for your support!*
-
-## Preview
-
-#### Résumé
-
-You can see [PDF](https://raw.githubusercontent.com/posquit0/Awesome-CV/master/examples/resume.pdf)
-
-| Page. 1 | Page. 2 |
-|:---:|:---:|
-| [![Résumé](https://raw.githubusercontent.com/posquit0/Awesome-CV/master/examples/resume-0.png)](https://raw.githubusercontent.com/posquit0/Awesome-CV/master/examples/resume.pdf)  | [![Résumé](https://raw.githubusercontent.com/posquit0/Awesome-CV/master/examples/resume-1.png)](https://raw.githubusercontent.com/posquit0/Awesome-CV/master/examples/resume.pdf) |
-
-#### Cover Letter
-
-You can see [PDF](https://raw.githubusercontent.com/posquit0/Awesome-CV/master/examples/coverletter.pdf)
-
-| Without Sections | With Sections |
-|:---:|:---:|
-| [![Cover Letter(Traditional)](https://raw.githubusercontent.com/posquit0/Awesome-CV/master/examples/coverletter-0.png)](https://raw.githubusercontent.com/posquit0/Awesome-CV/master/examples/coverletter.pdf)  | [![Cover Letter(Awesome)](https://raw.githubusercontent.com/posquit0/Awesome-CV/master/examples/coverletter-1.png)](https://raw.githubusercontent.com/posquit0/Awesome-CV/master/examples/coverletter.pdf) |
-
-
-## Quick Start
-
-* [**Edit Résumé on OverLeaf.com**](https://www.overleaf.com/latex/templates/awesome-cv/tvmzpvdjfqxp)
-* [**Edit Cover Letter on OverLeaf.com**](https://www.overleaf.com/latex/templates/awesome-cv-cover-letter/pfzzjspkthbk)
-
-**_Note:_ Above services do not guarantee up-to-date source code of Awesome CV**
-
-
-## How to Use
-
-#### Requirements
-
-A full TeX distribution is assumed.  [Various distributions for different operating systems (Windows, Mac, \*nix) are available](http://tex.stackexchange.com/q/55437) but TeX Live is recommended.
-You can [install TeX from upstream](https://tex.stackexchange.com/q/1092) (recommended; most up-to-date) or use `sudo apt-get install texlive-full` if you really want that.  (It's generally a few years behind.)
-
-If you don't want to install the dependencies on your system, this can also be obtained via [Docker](https://docker.com).
-
-#### Usage
-
-At a command prompt, run
-
-```bash
-$ xelatex {your-cv}.tex
+```text
+getkan-cv.cls
+resume/
+  fonts/
+  resume.tex
+  modules/
+    summary.tex
+    experience.tex
+    personalprojects.tex
+    aboutme.tex
+    education.tex
 ```
 
-Or using docker:
+### Root and Class Files
+
+- `getkan-cv.cls`
+  - Custom document class for layout, typography, spacing, and CV macros (`\cvsection`, `\cventry`, `\cvitems`, etc.).
+- `resume/resume.tex`
+  - Main resume entrypoint.
+  - Sets page geometry, color theme, fonts, and header/footer identity fields.
+  - Imports active content modules using `\input{modules/...}`.
+- `resume/fonts/`
+  - Local font files consumed by `\fontdir[fonts/]` in `resume/resume.tex`.
+  - Provides Roboto variants and FontAwesome used by the custom class.
+
+### Section Module Files (`resume/modules/*.tex`)
+
+- `resume/modules/summary.tex`
+  - Summary section (`\cvsection{Summary}`) with a single paragraph describing your profile.
+- `resume/modules/experience.tex`
+  - Work Experience section with role blocks and bullet groups.
+  - Uses `\cventry`, `\cvitems`, and `\cvsubitems` for job history and achievements.
+- `resume/modules/personalprojects.tex`
+  - Personal Projects section.
+  - Includes optional intro text and project bullets used by tailoring/project-priority logic.
+- `resume/modules/aboutme.tex`
+  - About Me section.
+  - Mixes education anchor content plus personal interest/context bullets.
+- `resume/modules/education.tex`
+  - Standalone Education section content.
+  - Currently present as a source module but not imported by default in `resume/resume.tex`.
+
+### Generated TeX (Per Tailoring Run)
+
+For each tailored run, TeX files are copied/generated into:
+
+- `output/<job_name>/resume/resume.tex`
+  - Compilable run-specific root file.
+- `output/<job_name>/resume/modules/*.tex`
+  - Tailored versions of section modules used for that job target.
+- `output/<job_name>/<job_name>.pdf`
+  - Published final PDF at the output root.
+
+## Requirements
+
+- Python 3.10+ (recommended)
+- `xelatex` available on `PATH`
+- Optional but recommended: `pdfinfo` (for page count metadata)
+- OpenRouter API key for model-assisted parsing:
+  - `OPENROUTER_API_KEY`
+  - Optional global fallback: `OPENROUTER_MODEL`
+  - Optional parser model override: `OPENROUTER_MODEL_PARSER`
+  - Optional tailor model override: `OPENROUTER_MODEL_TAILOR`
+  - Optional advisor model override: `OPENROUTER_MODEL_ADVISOR`
+
+Install Python dependencies:
 
 ```bash
-$ docker run --rm --user $(id -u):$(id -g) -i -w "/doc" -v "$PWD":/doc thomasweise/texlive make
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-In either case, this should result in the creation of ``{your-cv}.pdf``
+Minimal Python packages used:
 
+- `langchain-core`
+- `langchain-openai`
+- `requests`
 
-## Credit
+## Environment Setup
 
-[**LaTeX**](https://www.latex-project.org) is a fantastic typesetting program that a lot of people use these days, especially the math and computer science people in academia.
+Create a `.env` file in the repository root (optional if env vars are already exported):
 
-[**LaTeX FontAwesome**](https://github.com/furl/latex-fontawesome) is bindings for FontAwesome icons to be used in XeLaTeX.
+```env
+OPENROUTER_API_KEY=your_key_here
+OPENROUTER_MODEL=openai/gpt-4o-mini
+OPENROUTER_MODEL_PARSER=openai/gpt-4o-mini
+OPENROUTER_MODEL_TAILOR=anthropic/claude-3.7-sonnet
+OPENROUTER_MODEL_ADVISOR=openai/gpt-4.1-mini
+```
 
-[**Roboto**](https://github.com/google/roboto) is the default font on Android and ChromeOS, and the recommended font for Google’s visual language, Material Design.
+Model resolution order is:
 
-[**Source Sans Pro**](https://github.com/adobe-fonts/source-sans-pro) is a set of OpenType fonts that have been designed to work well in user interface (UI) environments.
+- Parser: `OPENROUTER_MODEL_PARSER` -> `OPENROUTER_MODEL` -> built-in default
+- Tailor: `--model` CLI override -> `OPENROUTER_MODEL_TAILOR` -> `OPENROUTER_MODEL` -> `anthropic/claude-3.7-sonnet`
+- Advisor: `--model` CLI override -> `OPENROUTER_MODEL_ADVISOR` -> `OPENROUTER_MODEL` -> `openai/gpt-4.1-mini`
 
+Section-level tailoring controls live in `src/prompts/tailor_prompts.json`.
+Common keys:
 
-## Contact
+- `summary_section_prompt`
+- `experience_section_prompt`
+- `personalprojects_section_prompt`
+- `aboutme_section_prompt`
+- `aboutme_required_items` (delimiter: `||`)
 
-You are free to take my `.tex` file and modify it to create your own resume. Please don't use my resume for anything else without my permission, though!
+To customize personal project order, include it directly inside `personalprojects_section_prompt`:
 
-If you have any questions, feel free to join me at [`#posquit0` on Freenode](irc://irc.freenode.net/posquit0) and ask away. Click [here](https://kiwiirc.com/client/irc.freenode.net/posquit0) to connect.
+`Priority order: getkan-cv||linux enthusiast||mystic type-writer||notesboard plus plus`
 
-Good luck!
+## Command Reference
 
+### 1) Tailor from a job URL
 
-## Maintainers
-- [posquit0](https://github.com/posquit0)
-- [OJFord](https://github.com/OJFord)
+```bash
+./tailor-resume <job_name> -u <job_url>
+```
 
+Example:
 
-## See Also
+```bash
+./tailor-resume github-careers -u "https://www.github.careers/careers-home/jobs/5682?lang=en-us"
+```
 
-* [Awesome Identity](https://github.com/posquit0/hugo-awesome-identity) - A single-page Hugo theme to introduce yourself.
+### 2) Tailor from a local listing file
+
+```bash
+./tailor-resume <job_name> -f <path_to_listing_text_or_html>
+```
+
+### 2b) Batch process multiple URLs with auto job names
+
+```bash
+./tailor-resume -l <path_to_url_list_file>
+```
+
+Optional custom output root for batch runs:
+
+```bash
+./tailor-resume -l <path_to_url_list_file> -o <output_dir>
+```
+
+The URL list file should contain one URL per line (blank lines and lines starting with `#` are ignored).
+This mode auto-generates unique job names from parsed company/title and writes each run to its own output folder.
+
+### 3) Set custom output directory
+
+```bash
+./tailor-resume <job_name> -u <job_url> -o <output_dir>
+```
+
+If `-o` is omitted, default output is:
+
+```text
+output/<job_name>
+```
+
+### 4) Override model (optional)
+
+```bash
+./tailor-resume <job_name> -u <job_url> --model <model_id>
+```
+
+### 5) Recompile existing output after manual `.tex` edits
+
+Use this after you edit files in `output/<job_name>/resume` (for example `modules/experience.tex`):
+
+```bash
+./tailor-resume <job_name> --recompile
+```
+
+Or with an explicit output directory:
+
+```bash
+./tailor-resume <job_name> --recompile -o <output_dir>
+```
+
+This mode:
+
+- Skips parser/tailoring.
+- Rebuilds from `resume/resume.tex` and republishes `<job_name>.pdf` at output root.
+- Updates compile metadata in `tailored_resume.json` when available.
+
+### 6) Build the base resume (no tailoring)
+
+```bash
+./tailor-resume --build-basic
+```
+
+Optional custom output directory:
+
+```bash
+./tailor-resume --build-basic -o <output_dir>
+```
+
+Default output when `-o` is omitted:
+
+```text
+output/general
+```
+
+### 7) Show CLI help
+
+```bash
+./tailor-resume -h
+```
+
+### 8) Generate job hunt recommendations from saved packets
+
+```bash
+./tailor-resume --job-hunt-advice
+```
+
+Optional custom output root to scan and write recommendations:
+
+```bash
+./tailor-resume --job-hunt-advice -o <output_dir>
+```
+
+Optional explicit packet files (instead of discovery scan):
+
+```bash
+./tailor-resume --job-hunt-advice --job-packets output/role-a/job_packet.json output/role-b/job_packet.json
+```
+
+This mode:
+
+- Scans `output/**/job_packet.json`.
+- Or uses explicit files from `--job-packets` when provided.
+- Compares market demand from saved packets against your current resume modules and `skills.json`.
+- Writes `job_hunt_recommendations.md` with skills and positioning recommendations.
+- If no packets are available, it writes general job-hunt recommendations instead of a blank/no-data message.
+
+## Test Commands
+
+Run the current unit test suite:
+
+```bash
+python -m unittest -q tests.test_job_parser_agent
+```
+
+## Generated Output Layout
+
+For a run like `./tailor-resume github-careers ...`:
+
+- `output/github-careers/job_packet.json`: Parsed and normalized job data.
+- `output/github-careers/tailored_resume.json`: Tailoring payload + compile metadata.
+- `output/github-careers/resume/resume.tex`: Compilable resume root.
+- `output/github-careers/resume/modules/*.tex`: Tailored module files.
+- `output/github-careers/github-careers.pdf`: Final PDF output.
+- `log/source_history.jsonl`: Append-only history of previously used URL/file inputs with timestamps.
+
+For each tailored run, a `compatibility_score` (1-10) is computed and:
+
+- printed in CLI JSON output,
+- stored in `tailored_resume.json`,
+- appended to `log/source_history.jsonl`.
+
+## Typical Workflow
+
+1. Run tailoring from URL or file.
+2. Inspect generated modules in `output/<job_name>/resume/modules`.
+3. Make manual edits if needed.
+4. Recompile with `--recompile`.
+
+For a non-tailored base resume build, use `--build-basic`.
+
+## Notes
+
+- Tailoring is constrained to use existing resume facts only.
+- Project selection/prioritization logic for personalprojects content is deterministic and independent of job description.
+- One-page fitting uses progressive compactness profiles when generating tailored output.

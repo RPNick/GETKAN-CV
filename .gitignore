@@ -21,3 +21,19 @@
 ## Mac OS X metadata files:
 *.DS_Store
 
+.env
+
+## Resume folder content
+resume/*
+!resume/.gitkeep
+!resume/fonts/
+!resume/fonts/**
+
+## Output folder
+output/
+
+docs/
+
+.vscode/
+.github/
+logs/   

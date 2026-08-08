@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -54,6 +55,39 @@ DEFAULT_SKILLS: dict[str, list[str]] = {
     "devops_and_delivery": ["Git", "Docker", "GitHub Actions"],
     "testing_and_quality": ["Jest", "Vue Test Utils", "Unit Testing", "Integration Testing", "Test Strategy"],
 }
+
+_ENV_TOKEN_PATTERN = re.compile(r"\$\{([A-Z0-9_]+)\}")
+
+
+def _load_env_values() -> dict[str, str]:
+    values: dict[str, str] = dict(os.environ)
+    repo_root = Path(__file__).resolve().parents[2]
+    dotenv_candidates = [Path.cwd() / ".env", repo_root / ".env"]
+
+    for env_path in dotenv_candidates:
+        if not env_path.exists():
+            continue
+        try:
+            lines = env_path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in stripped:
+                continue
+            key, value = stripped.split("=", 1)
+            values.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+    return values
+
+
+def render_env_placeholders(text: str) -> str:
+    env_values = _load_env_values()
+
+    def _replace(match: re.Match[str]) -> str:
+        key = match.group(1)
+        return env_values.get(key, match.group(0))
+
+    return _ENV_TOKEN_PATTERN.sub(_replace, text)
 
 
 def _load_prompt_config() -> dict[str, str]:
@@ -783,6 +817,7 @@ def write_artifacts(state: ResumeTailorState, output_dir: str | Path, job_name: 
     resume_text = resume_target.read_text(encoding="utf-8")
     resume_text = resume_text.replace("\\documentclass[11pt, letterpaper]{../getkan-cv}", "\\documentclass[11pt, letterpaper]{getkan-cv}")
     resume_text = resume_text.replace("\\fontdir[../fonts/]", "\\fontdir[fonts/]")
+    resume_text = render_env_placeholders(resume_text)
     resume_target.write_text(resume_text, encoding="utf-8")
 
     output_path = destination / "tailored_resume.json"
@@ -809,6 +844,9 @@ def compile_and_summarize(state: ResumeTailorState, artifacts: dict[str, Any]) -
     output_pdf = source_root / "resume.pdf"
     published_pdf = output_dir / f"{safe_job_name}.pdf"
     logs: list[str] = []
+
+    if resume_tex.exists():
+        resume_tex.write_text(render_env_placeholders(resume_tex.read_text(encoding="utf-8")), encoding="utf-8")
 
     for pass_index in range(2):
         result = subprocess.run(

@@ -16,7 +16,7 @@ if __package__ in {None, ""}:
 
 from src.agents.job_parser_agent import JobParserState, extract_facts, fetch_or_load_listing, handoff_to_tailor, normalize_packet, validate_packet
 from src.agents.job_hunt_advisor import generate_job_hunt_recommendations
-from src.agents.resume_tailor_agent import build_tailored_payload, recompile_existing_output
+from src.agents.resume_tailor_agent import build_tailored_payload, recompile_existing_output, render_env_placeholders
 
 
 ROLE_DEFAULT_MODELS: dict[str, str] = {
@@ -391,6 +391,20 @@ def build_basic_resume(output_dir: Optional[str]) -> dict[str, str]:
     resume_dir = repo_root / "resume"
     destination = Path(output_dir) if output_dir else Path.cwd() / "output" / "general"
     destination.mkdir(parents=True, exist_ok=True)
+    resume_output_root = destination / "resume"
+    resume_output_root.mkdir(parents=True, exist_ok=True)
+
+    shutil.copy2(repo_root / "getkan-cv.cls", resume_output_root / "getkan-cv.cls")
+    shutil.copytree(resume_dir / "modules", resume_output_root / "modules", dirs_exist_ok=True)
+    fonts_dir = resume_dir / "fonts"
+    if fonts_dir.exists():
+        shutil.copytree(fonts_dir, resume_output_root / "fonts", dirs_exist_ok=True)
+
+    resume_text = (resume_dir / "resume.tex").read_text(encoding="utf-8")
+    resume_text = resume_text.replace("\\documentclass[11pt, letterpaper]{../getkan-cv}", "\\documentclass[11pt, letterpaper]{getkan-cv}")
+    resume_text = resume_text.replace("\\fontdir[../fonts/]", "\\fontdir[fonts/]")
+    resume_text = render_env_placeholders(resume_text)
+    (resume_output_root / "resume.tex").write_text(resume_text, encoding="utf-8")
 
     xelatex = shutil.which("xelatex")
     if not xelatex:
@@ -399,8 +413,8 @@ def build_basic_resume(output_dir: Optional[str]) -> dict[str, str]:
     logs: list[str] = []
     for pass_index in range(2):
         result = subprocess.run(
-            [xelatex, "-interaction=nonstopmode", "-halt-on-error", "-output-directory", str(destination), "resume.tex"],
-            cwd=resume_dir,
+            [xelatex, "-interaction=nonstopmode", "-halt-on-error", "resume.tex"],
+            cwd=resume_output_root,
             capture_output=True,
             text=True,
         )
@@ -412,7 +426,10 @@ def build_basic_resume(output_dir: Optional[str]) -> dict[str, str]:
         if result.returncode != 0:
             raise RuntimeError("Basic resume compile failed")
 
+    compiled_pdf = resume_output_root / "resume.pdf"
     pdf_path = destination / "resume.pdf"
+    if compiled_pdf.exists():
+        shutil.copy2(compiled_pdf, pdf_path)
     return {
         "output_dir": str(destination),
         "pdf": str(pdf_path if pdf_path.exists() else ""),

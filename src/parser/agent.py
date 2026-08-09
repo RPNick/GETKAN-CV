@@ -189,26 +189,6 @@ def _parse_job_with_openrouter(listing_text: str, source: dict[str, Any] | None 
     system_prompt = prompts["job_parser_system_prompt"]
     user_prompt = prompts["job_parser_user_prompt_template"].format(listing_text=listing_text)
 
-    try:
-        from langchain_core.messages import HumanMessage, SystemMessage
-        from langchain_openai import ChatOpenAI
-    except ImportError:
-        llm = None
-    else:
-        llm = ChatOpenAI(
-            model=model,
-            api_key=api_key,
-            base_url="https://openrouter.ai/api/v1",
-            temperature=0,
-        )
-        try:
-            response = llm.invoke([SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)])
-            payload = _extract_json_payload(getattr(response, "content", response))
-            if payload:
-                return payload
-        except Exception:
-            pass
-
     if requests is None:
         raise RuntimeError("requests is required for job parsing")
 

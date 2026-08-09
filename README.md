@@ -108,8 +108,6 @@ pip install -r requirements.txt
 
 Minimal Python packages used:
 
-- `langchain-core`
-- `langchain-openai`
 - `requests`
 
 ## Environment Setup
@@ -285,6 +283,14 @@ This mode:
 ```bash
 ./tailor-resume -h
 ```
+
+### 6) Clean generated output and logs
+
+```bash
+./tailor-resume --clean
+```
+
+This removes the contents of `output/` and `log/` and recreates both directories.
 
 ## Test Commands
 

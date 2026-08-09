@@ -91,6 +91,23 @@ def append_source_log(job_name: str, file_path: Optional[str], job_url: Optional
     return str(log_path)
 
 
+def _clear_directory_contents(directory: Path) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    for entry in directory.iterdir():
+        if entry.is_dir() and not entry.is_symlink():
+            shutil.rmtree(entry)
+        else:
+            entry.unlink(missing_ok=True)
+
+
+def clean_workspace_artifacts(output_root: Optional[str] = None, log_root: Optional[str] = None) -> dict[str, str]:
+    output_dir = Path(output_root) if output_root else Path.cwd() / "output"
+    log_dir = Path(log_root) if log_root else Path.cwd() / "log"
+    _clear_directory_contents(output_dir)
+    _clear_directory_contents(log_dir)
+    return {"output_dir": str(output_dir), "log_dir": str(log_dir)}
+
+
 def _slugify(value: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9]+", "-", (value or "").strip().lower())
     cleaned = cleaned.strip("-")
@@ -432,6 +449,23 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     try:
+        if getattr(args, "clean", False):
+            result = clean_workspace_artifacts()
+            print(
+                json.dumps(
+                    {
+                        "mode": "clean",
+                        "output_dir": result["output_dir"],
+                        "log_dir": result["log_dir"],
+                    },
+                    indent=2,
+                )
+            )
+            return 0
+
+        if not getattr(args, "command", None):
+            raise ValueError("Provide a command")
+
         if args.command == "build":
             return run(
                 args.job_name,

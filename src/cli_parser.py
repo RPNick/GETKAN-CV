@@ -5,7 +5,8 @@ import argparse
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="tailor-resume")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    parser.add_argument("--clean", action="store_true", help="Remove generated output and log contents")
+    subparsers = parser.add_subparsers(dest="command")
 
     # Build tailored resume output from a URL, local listing file, or URL list file
     build = subparsers.add_parser(

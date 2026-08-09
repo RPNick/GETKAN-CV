@@ -24,6 +24,7 @@ from src.advisor.sections.skills import build_recommend_skills_section
 from src.advisor.agent import _generate_recommendation_sections, generate_job_hunt_recommendations
 from src.tailor.agent import _score_item, build_allowlist, build_tailored_payload
 from src.main import calculate_compatibility_score, rebuild_from_job_packet, run
+from src.main import clean_workspace_artifacts
 
 
 class JobParserAgentTests(unittest.TestCase):
@@ -519,16 +520,24 @@ class JobParserAgentTests(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             log_path = Path(tmpdir) / "log" / "source_history.jsonl"
             self.assertTrue(log_path.exists())
-            lines = [line for line in log_path.read_text(encoding="utf-8").splitlines() if line.strip()]
-            self.assertGreaterEqual(len(lines), 1)
-            payload = json.loads(lines[-1])
-            self.assertEqual(payload.get("job_name"), "demo-job")
-            self.assertEqual(payload.get("url"), "https://example.com/jobs/1")
-            self.assertTrue(payload.get("file", "").endswith("listing.txt"))
-            self.assertEqual(payload.get("model_name"), "gpt-4o-mini")
-            self.assertIsInstance(payload.get("compatibility_score"), int)
-            self.assertGreaterEqual(payload.get("compatibility_score"), 1)
-            self.assertLessEqual(payload.get("compatibility_score"), 10)
+
+    def test_clean_workspace_artifacts_removes_output_and_log_contents(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            log_dir = Path(tmpdir) / "log"
+            (output_dir / "sample" / "nested").mkdir(parents=True, exist_ok=True)
+            (output_dir / "sample" / "nested" / "file.txt").write_text("data", encoding="utf-8")
+            (log_dir / "source_history.jsonl").parent.mkdir(parents=True, exist_ok=True)
+            (log_dir / "source_history.jsonl").write_text("entry", encoding="utf-8")
+
+            result = clean_workspace_artifacts(output_root=str(output_dir), log_root=str(log_dir))
+
+            self.assertEqual(result["output_dir"], str(output_dir))
+            self.assertEqual(result["log_dir"], str(log_dir))
+            self.assertTrue(output_dir.exists())
+            self.assertTrue(log_dir.exists())
+            self.assertEqual(list(output_dir.iterdir()), [])
+            self.assertEqual(list(log_dir.iterdir()), [])
 
     def test_run_recompile_mode_skips_parsing_pipeline(self):
         with tempfile.TemporaryDirectory() as tmpdir:

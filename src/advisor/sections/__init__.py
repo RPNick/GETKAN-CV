@@ -1,0 +1,7 @@
+from .general_advice import build_general_advice_section
+from .ats_keyword_gaps import build_ats_keyword_gaps_section
+from .interview_prep import build_interview_prep_section
+from .portfolio_suggestions import build_portfolio_suggestions_section
+from .job_titles import build_recommended_job_titles_section
+from .resume_recommendation import build_resume_recommendation_section
+from .skills import build_recommend_skills_section

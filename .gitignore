@@ -36,4 +36,5 @@ docs/
 
 .vscode/
 .github/
-logs/   
+log/   
+tmp/

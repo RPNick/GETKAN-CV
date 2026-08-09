@@ -24,7 +24,7 @@ class JobParserState(TypedDict):
     confidence: float
 
 
-PROMPT_CONFIG_PATH = Path(__file__).resolve().parents[1] / "prompts" / "tailor_prompts.json"
+PROMPT_CONFIG_PATH = Path(__file__).resolve().parents[1] / "prompts" / "parser" / "prompts.json"
 DEFAULT_PARSER_PROMPTS: dict[str, str] = {
     "job_parser_system_prompt": (
         "You extract structured job posting data. Return valid JSON with keys: "

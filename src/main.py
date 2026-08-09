@@ -14,9 +14,11 @@ from typing import Any, Optional
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.agents.job_parser_agent import JobParserState, extract_facts, fetch_or_load_listing, handoff_to_tailor, normalize_packet, validate_packet
-from src.agents.job_hunt_advisor import generate_job_hunt_recommendations
-from src.agents.resume_tailor_agent import build_tailored_payload, recompile_existing_output, render_env_placeholders
+from src.parser.agent import JobParserState, extract_facts, fetch_or_load_listing, handoff_to_tailor, normalize_packet, validate_packet
+from src.advisor.agent import generate_job_hunt_recommendations
+from src.tailor.agent import build_tailored_payload, recompile_existing_output, render_env_placeholders
+from src.cli_parser import build_parser
+from src.compatibility_score import calculate_compatibility_score
 
 
 ROLE_DEFAULT_MODELS: dict[str, str] = {
@@ -24,41 +26,6 @@ ROLE_DEFAULT_MODELS: dict[str, str] = {
     "TAILOR": "anthropic/claude-3.7-sonnet",
     "ADVISOR": "openai/gpt-4.1-mini",
 }
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="tailor-resume")
-    parser.add_argument("job_name", nargs="?", help="Short name for the tailored resume run")
-    parser.add_argument("-f", "--file", dest="file_path", help="Path to a job packet or listing file")
-    parser.add_argument("-u", "--url", dest="job_url", help="Job listing URL")
-    parser.add_argument("-l", "--url-list-file", dest="url_list_file", help="Path to a text file containing job URLs (one per line) for batch processing")
-    parser.add_argument("-o", "--output", dest="output_dir", help="Output directory for generated artifacts")
-    parser.add_argument("--model", dest="model_name", help="Optional OpenRouter model override")
-    parser.add_argument(
-        "--build-basic",
-        dest="build_basic",
-        action="store_true",
-        help="Build the base resume from resume/resume.tex without tailoring",
-    )
-    parser.add_argument(
-        "--recompile",
-        dest="recompile_existing",
-        action="store_true",
-        help="Recompile an existing generated output (uses <output>/resume/resume.tex after manual .tex edits)",
-    )
-    parser.add_argument(
-        "--job-hunt-advice",
-        dest="job_hunt_advice",
-        action="store_true",
-        help="Analyze saved output job_packet.json files and resume modules, then write job_hunt_recommendations.md",
-    )
-    parser.add_argument(
-        "--job-packets",
-        dest="job_packet_files",
-        nargs="*",
-        help="Optional explicit job_packet.json file paths for advisor mode (falls back to scanning output/**/job_packet.json)",
-    )
-    return parser
 
 
 def load_listing_from_file(file_path: Optional[str]) -> str:
@@ -105,184 +72,6 @@ def _resolve_model_for_role(role: str, cli_override: Optional[str]) -> Optional[
     _load_dotenv()
     role_key = f"OPENROUTER_MODEL_{role.upper()}"
     return os.getenv(role_key) or os.getenv("OPENROUTER_MODEL") or ROLE_DEFAULT_MODELS.get(role.upper())
-
-
-def _contains_keyword(text: str, keyword: str) -> bool:
-    escaped = re.escape(keyword)
-    if re.search(r"[^A-Za-z0-9]", keyword):
-        return escaped.lower() in text.lower()
-    return re.search(rf"\b{escaped}\b", text, flags=re.I) is not None
-
-
-def _resume_match_corpus() -> str:
-    repo_root = Path(__file__).resolve().parent.parent
-    modules_dir = repo_root / "resume" / "modules"
-    module_names = ["summary.tex", "experience.tex", "personalprojects.tex", "aboutme.tex"]
-    parts: list[str] = []
-    for name in module_names:
-        path = modules_dir / name
-        if path.exists():
-            parts.append(path.read_text(encoding="utf-8"))
-
-    skills_path = modules_dir / "skills.json"
-    if skills_path.exists():
-        try:
-            payload = json.loads(skills_path.read_text(encoding="utf-8"))
-            if isinstance(payload, dict):
-                for values in payload.values():
-                    if isinstance(values, list):
-                        parts.append(" ".join(str(item) for item in values))
-        except (json.JSONDecodeError, OSError):
-            pass
-    return "\n".join(parts).lower()
-
-
-def _known_skill_terms() -> list[str]:
-    repo_root = Path(__file__).resolve().parent.parent
-    skills_path = repo_root / "resume" / "modules" / "skills.json"
-    terms: list[str] = []
-    if skills_path.exists():
-        try:
-            payload = json.loads(skills_path.read_text(encoding="utf-8"))
-            if isinstance(payload, dict):
-                for values in payload.values():
-                    if isinstance(values, list):
-                        for item in values:
-                            cleaned = str(item).strip().lower()
-                            if cleaned:
-                                terms.append(cleaned)
-        except (json.JSONDecodeError, OSError):
-            pass
-
-    # Add common role terms that frequently appear inside long requirement sentences.
-    terms.extend(
-        [
-            "api",
-            "json:api",
-            "backend",
-            "frontend",
-            "distributed systems",
-            "microservices",
-            "mysql",
-            "postgresql",
-            "redis",
-            "observability",
-            "opentelemetry",
-            "ci/cd",
-            "websockets",
-            "kubernetes",
-            "docker",
-            "go",
-            "python",
-            "php",
-            "laravel",
-            "react",
-            "vue",
-            "typescript",
-            "javascript",
-        ]
-    )
-    deduped: list[str] = []
-    seen: set[str] = set()
-    for term in terms:
-        if term in seen:
-            continue
-        seen.add(term)
-        deduped.append(term)
-    return deduped
-
-
-def _extract_requirement_terms(requirement: str, known_terms: list[str]) -> list[str]:
-    text = (requirement or "").strip().lower()
-    if not text:
-        return []
-
-    candidates: list[str] = []
-
-    # Skill-aware extraction first so multiword technologies are preserved.
-    for term in known_terms:
-        if _contains_keyword(text, term):
-            candidates.append(term)
-
-    # Split long requirements into smaller chunks.
-    chunked = re.split(r"[,;/]|\band\b|\bor\b|\bwith\b|\bsuch as\b|\bincluding\b|\blike\b", text)
-    for chunk in chunked:
-        cleaned = re.sub(r"\s+", " ", chunk).strip(" .:-")
-        if len(cleaned) < 3:
-            continue
-        if len(cleaned.split()) > 8:
-            continue
-        candidates.append(cleaned)
-
-    # Single-token fallback for common terms/acronyms.
-    for token in re.findall(r"[a-z0-9+#\.:-]{2,}", text):
-        if token in {"years", "experience", "strong", "skills", "ability", "understanding"}:
-            continue
-        if token.isdigit():
-            continue
-        candidates.append(token)
-
-    deduped: list[str] = []
-    seen: set[str] = set()
-    for item in candidates:
-        key = item.strip()
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        deduped.append(key)
-    return deduped
-
-
-def _requirement_match_score(corpus: str, requirement: str, known_terms: list[str]) -> float:
-    req = (requirement or "").strip().lower()
-    if not req:
-        return 0.0
-
-    # Full phrase match gets full credit.
-    if _contains_keyword(corpus, req):
-        return 1.0
-
-    terms = _extract_requirement_terms(req, known_terms)
-    if not terms:
-        return 0.0
-
-    matches = sum(1 for term in terms if _contains_keyword(corpus, term))
-    ratio = matches / len(terms)
-    return min(0.95, ratio)
-
-
-def calculate_compatibility_score(job_packet: dict[str, Any]) -> int:
-    job = job_packet.get("job", {}) if isinstance(job_packet, dict) else {}
-    must_have = [str(item).strip() for item in (job.get("must_have") or []) if str(item).strip()]
-    nice_to_have = [str(item).strip() for item in (job.get("nice_to_have") or []) if str(item).strip()]
-    title = str(job.get("title") or "")
-    domain = str(job.get("domain") or "")
-
-    corpus = _resume_match_corpus()
-    known_terms = _known_skill_terms()
-
-    must_ratio = 0.0
-    if must_have:
-        must_scores = [_requirement_match_score(corpus, item, known_terms) for item in must_have]
-        must_ratio = sum(must_scores) / len(must_scores)
-
-    nice_ratio = 0.0
-    if nice_to_have:
-        nice_scores = [_requirement_match_score(corpus, item, known_terms) for item in nice_to_have]
-        nice_ratio = sum(nice_scores) / len(nice_scores)
-
-    title_tokens = [token for token in re.findall(r"[A-Za-z][A-Za-z+#]{2,}", f"{title} {domain}") if token.lower() not in {"senior", "software", "engineer"}]
-    title_ratio = 0.0
-    if title_tokens:
-        title_matches = sum(1 for token in title_tokens if _contains_keyword(corpus, token.lower()))
-        title_ratio = title_matches / len(title_tokens)
-
-    weighted_ratio = (must_ratio * 0.7) + (nice_ratio * 0.2) + (title_ratio * 0.1)
-    if not must_have and not nice_to_have and not title_tokens:
-        weighted_ratio = 0.45
-
-    score = int(round(1 + (weighted_ratio * 9)))
-    return max(1, min(10, score))
 
 
 def append_source_log(job_name: str, file_path: Optional[str], job_url: Optional[str], compatibility_score: int, model_name: Optional[str] = None) -> str:
@@ -437,6 +226,61 @@ def build_basic_resume(output_dir: Optional[str]) -> dict[str, str]:
     }
 
 
+def rebuild_from_job_packet(
+    job_packet_file: str,
+    job_name: Optional[str],
+    output_dir: Optional[str],
+    model_name: Optional[str],
+) -> dict[str, Any]:
+    packet_path = Path(job_packet_file)
+    if not packet_path.exists() or not packet_path.is_file():
+        raise FileNotFoundError(f"Job packet file not found: {job_packet_file}")
+
+    try:
+        packet_payload = json.loads(packet_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        raise ValueError(f"Invalid job packet JSON: {job_packet_file}") from exc
+
+    if not isinstance(packet_payload, dict) or not isinstance(packet_payload.get("job"), dict):
+        raise ValueError("Job packet must be a JSON object with a top-level 'job' object")
+
+    inferred_name = packet_path.parent.name if packet_path.name == "job_packet.json" else packet_path.stem
+    effective_name = _slugify(job_name or inferred_name)
+    output_root = Path(output_dir) if output_dir else (Path.cwd() / "output" / effective_name)
+    output_root.mkdir(parents=True, exist_ok=True)
+
+    resolved_tailor_model = _resolve_model_for_role("TAILOR", model_name)
+    compatibility_score = calculate_compatibility_score(packet_payload)
+    source_log_path = append_source_log(
+        effective_name,
+        str(packet_path.resolve()),
+        None,
+        compatibility_score,
+        model_name=resolved_tailor_model,
+    )
+
+    output_packet_path = output_root / "job_packet.json"
+    output_packet_path.write_text(json.dumps(packet_payload, indent=2), encoding="utf-8")
+
+    payload = build_tailored_payload(packet_payload, job_name=effective_name, output_dir=str(output_root), model_name=resolved_tailor_model)
+    payload["compatibility_score"] = compatibility_score
+    summary_path = output_root / "tailored_resume.json"
+    summary_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    return {
+        "mode": "rebuild",
+        "job_name": effective_name,
+        "job_packet_file": str(packet_path.resolve()),
+        "output_dir": str(output_root),
+        "job_packet": str(output_packet_path),
+        "summary": str(summary_path),
+        "pdf": payload.get("compile", {}).get("pdf_path", ""),
+        "compatibility_score": compatibility_score,
+        "source_log": source_log_path,
+        "model_name": resolved_tailor_model or "",
+    }
+
+
 def run(
     job_name: Optional[str],
     file_path: Optional[str],
@@ -550,7 +394,7 @@ def run(
         return 0
 
     if not job_name:
-        raise ValueError("Provide job_name unless using --build-basic")
+        raise ValueError("Provide job_name for single-run builds")
 
     default_output_root = Path.cwd() / "output" / job_name
     output_root = Path(output_dir or str(default_output_root))
@@ -588,18 +432,43 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     try:
-        return run(
-            args.job_name,
-            args.file_path,
-            args.job_url,
-            args.output_dir,
-            args.model_name,
-            args.build_basic,
-            args.recompile_existing,
-            args.job_hunt_advice,
-            args.job_packet_files,
-            args.url_list_file,
-        )
+        if args.command == "build":
+            return run(
+                args.job_name,
+                args.file_path,
+                args.job_url,
+                args.output_dir,
+                args.model_name,
+                False,
+                False,
+                False,
+                None,
+                args.url_list_file,
+            )
+
+        if args.command == "build-base":
+            return run(None, None, None, args.output_dir, None, build_basic=True)
+
+        if args.command == "rebuild":
+            result = rebuild_from_job_packet(args.job_packet_file, args.job_name, args.output_dir, args.model_name)
+            print(json.dumps(result, indent=2))
+            return 0
+
+        if args.command == "advice":
+            return run(
+                None,
+                None,
+                None,
+                args.output_dir,
+                args.model_name,
+                False,
+                False,
+                True,
+                args.job_packet_files,
+                None,
+            )
+
+        raise ValueError(f"Unknown command: {args.command}")
     except Exception as exc:  # pragma: no cover - CLI error surface
         print(str(exc), file=sys.stderr)
         return 1

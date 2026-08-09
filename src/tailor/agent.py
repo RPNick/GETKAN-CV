@@ -21,7 +21,7 @@ class ResumeTailorState(TypedDict, total=False):
     layout_profile: dict[str, int]
 
 
-PROMPT_CONFIG_PATH = Path(__file__).resolve().parents[1] / "prompts" / "tailor_prompts.json"
+PROMPT_CONFIG_PATH = Path(__file__).resolve().parents[1] / "prompts" / "tailor" / "prompts.json"
 SKILLS_CONFIG_PATH = Path(__file__).resolve().parents[2] / "resume" / "modules" / "skills.json"
 DEFAULT_PROMPTS: dict[str, str] = {
     "resume_customizer_system_prompt": (

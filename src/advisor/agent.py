@@ -6,10 +6,18 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from textwrap import shorten
 
 from src.compatibility_score import calculate_compatibility_score
-from src.utils.advisor_common import build_resume_corpus
+from src.advisor.sections import (
+    render_ats_keyword_gaps_section,
+    render_general_advice_section,
+    render_interview_prep_section,
+    render_portfolio_suggestions_section,
+    render_recommend_skills_section,
+    render_recommended_job_titles_section,
+    render_resume_recommendation_section,
+)
+from src.config.resume_modules import RESUME_MODULE_NAMES
 
 try:
     import requests
@@ -142,6 +150,15 @@ def _collect_job_packets_from_files(packet_files: list[str] | None) -> list[dict
         if isinstance(payload, dict) and isinstance(payload.get("job"), dict):
             packets.append(payload)
     return packets
+
+
+def _build_resume_corpus(resume_modules_dir: Path) -> str:
+    chunks: list[str] = []
+    for name in RESUME_MODULE_NAMES:
+        path = resume_modules_dir / name
+        if path.exists():
+            chunks.append(path.read_text(encoding="utf-8"))
+    return "\n".join(chunks)
 
 
 def _load_dotenv() -> None:
@@ -303,24 +320,26 @@ def _bullet_lines(items: list[str], heading: str, placeholder: str, prefix: str 
         lines.append(f"{prefix}{placeholder}")
         return lines
     for item in items:
-        text = shorten(_normalize_skill(str(item)), width=120, placeholder="...")
+        text = _normalize_skill(str(item))
         if text:
             lines.append(f"{prefix}{text}")
     return lines
 
 
 def _general_advice_lines(summary: str, advice: list[str]) -> list[str]:
-    lines = ["## General Advice and Summary", ""]
-    summary_text = shorten(_normalize_skill(summary), width=120, placeholder="...") if summary else ""
+    parts: list[str] = []
+    summary_text = _normalize_skill(summary) if summary else ""
     if summary_text:
-        lines.append(f"- Summary: {summary_text}")
-    for item in advice:
-        text = shorten(_normalize_skill(item), width=120, placeholder="...")
-        if text:
-            lines.append(f"- Advice: {text}")
-    if len(lines) == 2:
-        lines.append("- Summary: Add job packets to generate a tailored summary and advice.")
-    return lines
+        parts.append(f"Summary: {summary_text}")
+
+    advice_text = [_normalize_skill(item) for item in advice if _normalize_skill(item)]
+    if advice_text:
+        parts.append("Advice: " + " ".join(advice_text))
+
+    if not parts:
+        parts.append("Summary: Add job packets to generate a tailored summary and advice.")
+
+    return ["## General Advice and Summary", "", " ".join(parts)]
 
 
 def _recommended_job_titles_lines(rows: list[dict[str, Any]]) -> list[str]:
@@ -330,7 +349,7 @@ def _recommended_job_titles_lines(rows: list[dict[str, Any]]) -> list[str]:
         return lines
 
     for row in rows:
-        summary = shorten(f"{row['description']}. {row['rationale']}", width=100, placeholder="...")
+        summary = f"{row['description']}. {row['rationale']}".strip()
         lines.append(f"- {row['job_title']} (score {row['compatibility_score']}): {summary}")
     return lines
 
@@ -342,7 +361,7 @@ def _resume_recommendation_lines(rows: list[dict[str, Any]]) -> list[str]:
         return lines
 
     for row in rows:
-        summary = shorten(f"{row['recommendation']}. {row['reason']}", width=100, placeholder="...")
+        summary = f"{row['recommendation']}. {row['reason']}".strip()
         lines.append(f"- {row['area']}: {summary} (P{row['priority']})")
     return lines
 
@@ -408,31 +427,31 @@ def _generate_recommendation_sections(
 
     if not packets:
         sections = [
-            _general_advice_lines(
-                "The current resume shows experience worth tailoring, but job packets are needed for targeted guidance.",
-                [
-                    "Lead with the roles you want and the impact you have shipped.",
-                    "Mirror the language from target jobs in your summary and bullets.",
-                    "Keep the strongest evidence near the top of the resume.",
-                ],
+            render_general_advice_section(
+                summary="The current resume shows experience worth tailoring, but job packets are needed for targeted guidance.",
+                general_advice=(
+                    "Lead with the roles you want and the impact you have shipped. "
+                    "Mirror the language from target jobs in your summary and bullets. "
+                    "Keep the strongest evidence near the top of the resume."
+                ),
             ),
-            _skill_table_lines([]),
-            _recommended_job_titles_lines([]),
-            _resume_recommendation_lines([]),
-            _bullet_lines([], "## Interview Prep", "Add job packets to generate targeted interview prep."),
-            _bullet_lines([], "## ATS Keyword Gaps", "Add job packets to identify ATS keyword gaps."),
-            _bullet_lines([], "## Portfolio or Project Suggestions", "Add job packets to generate project ideas."),
+            render_recommend_skills_section(skill_rows=[], skills=[]),
+            render_recommended_job_titles_section(rows=[]),
+            render_resume_recommendation_section(rows=[]),
+            render_interview_prep_section(items=[]),
+            render_ats_keyword_gaps_section(items=[]),
+            render_portfolio_suggestions_section(items=[]),
         ]
 
         lines: list[str] = []
         for index, section in enumerate(sections):
-            lines.extend(section)
+            lines.extend(section["lines"])
             if index != len(sections) - 1:
                 lines.append("")
         return lines
 
     prompts = _load_advisor_prompts()
-    resume_corpus = build_resume_corpus(modules_dir)
+    resume_corpus = _build_resume_corpus(modules_dir)
     compact_packets = _compact_packets_with_scores(packets)
     payload = _post_openrouter_json(
         model=model,
@@ -446,12 +465,7 @@ def _generate_recommendation_sections(
             "type": "object",
             "properties": {
                 "summary": {"type": "string"},
-                "general_advice": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "minItems": 0,
-                    "maxItems": 6,
-                },
+                "general_advice": {"type": "string"},
                 "skills": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -523,8 +537,7 @@ def _generate_recommendation_sections(
     )
 
     summary = _normalize_skill(str(payload.get("summary") or ""))
-    general_advice = [shorten(_normalize_skill(str(item)), width=120, placeholder="...") for item in payload.get("general_advice", [])]
-    general_advice = [item for item in general_advice if item]
+    general_advice = _normalize_skill(str(payload.get("general_advice") or ""))
 
     skills = _unique_skills([str(item) for item in payload.get("skills", [])])
     skill_rows = [_count_skill_mentions(skill, packets) for skill in skills]
@@ -562,18 +575,18 @@ def _generate_recommendation_sections(
     resume_rows.sort(key=lambda row: (-row["priority"], row["area"].lower()))
 
     sections = [
-        _general_advice_lines(summary, general_advice),
-        _skill_table_lines(skill_rows),
-        _recommended_job_titles_lines(job_title_rows),
-        _resume_recommendation_lines(resume_rows),
-        _bullet_lines([str(item) for item in payload.get("interview_prep", [])], "## Interview Prep", "Review the packets, role fit, and recent project stories."),
-        _bullet_lines([str(item) for item in payload.get("ats_keyword_gaps", [])], "## ATS Keyword Gaps", "No major ATS gaps identified."),
-        _bullet_lines([str(item) for item in payload.get("portfolio_suggestions", [])], "## Portfolio or Project Suggestions", "No portfolio or project suggestions yet."),
+        render_general_advice_section(summary=summary, general_advice=general_advice),
+        render_recommend_skills_section(skill_rows=skill_rows, skills=[row["skill"] for row in skill_rows]),
+        render_recommended_job_titles_section(rows=job_title_rows),
+        render_resume_recommendation_section(rows=resume_rows),
+        render_interview_prep_section(items=[str(item) for item in payload.get("interview_prep", [])]),
+        render_ats_keyword_gaps_section(items=[str(item) for item in payload.get("ats_keyword_gaps", [])]),
+        render_portfolio_suggestions_section(items=[str(item) for item in payload.get("portfolio_suggestions", [])]),
     ]
 
     lines: list[str] = []
     for index, section in enumerate(sections):
-        lines.extend(section)
+        lines.extend(section["lines"])
         if index != len(sections) - 1:
             lines.append("")
     return lines

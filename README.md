@@ -14,19 +14,45 @@ It takes job input (URL, file, or URL list), extracts structured job requirement
 
 ## Project Structure
 
-- `src/main.py`: CLI entrypoint and workflow orchestration.
-- `src/parser/agent.py`: Job extraction, fallback parsing, normalization, validation.
-- `src/advisor/agent.py`: Cross-job analysis of saved job packets with resume-based recommendation output.
-- `src/tailor/agent.py`: Module tailoring, one-page fit profiles, artifact writing, compile logic.
-- `src/parser/prompts.json`: Editable prompt templates for parser behavior.
-- `src/tailor/prompts.json`: Editable prompt templates for tailor behavior.
-- `src/advisor/prompts.json`: Editable prompt templates for advisor behavior.
-- `src/utils/advisor_common.py`: Shared advisor helpers for prompt loading, packet compaction, and OpenRouter calls.
+### `src/`
+
+#### `src/main.py`
+
+- CLI entrypoint and workflow orchestration.
+
+#### `src/parser/`
+
+- `agent.py`: Job extraction, fallback parsing, normalization, validation.
+- `prompts.json`: Editable prompt templates for parser behavior.
+
+#### `src/advisor/`
+
+- `agent.py`: Cross-job analysis of saved job packets with resume-based recommendation output.
+- `prompts.json`: Editable prompt templates for advisor behavior.
+- `sections/`: Section builders for general advice, skills, job titles, resume recommendations, interview prep, ATS gaps, and portfolio suggestions.
+
+#### `src/tailor/`
+
+- `agent.py`: Module tailoring, one-page fit profiles, artifact writing, compile logic.
+- `prompts.json`: Editable prompt templates for tailor behavior.
+
+#### `src/utils/`
+
+- `advisor_common.py`: Shared advisor helpers for prompt loading, packet compaction, and OpenRouter calls.
+
+### `resume/`
+
 - `resume/modules/skills.json`: Editable technical skills catalog used by tailoring allowlist prioritization.
+- `resume/`: Source resume and base modules.
 
 Skills categories in `resume/modules/skills.json` also influence bullet prioritization strength during tailoring (for example testing-focused roles prioritize testing-heavy bullets).
-- `resume/`: Source resume and base modules.
+
+### `output/`
+
 - `output/`: Generated job-specific artifacts.
+
+### Repository root
+
 - `tailor-resume`: Executable wrapper script.
 
 ## LaTeX File Structure

@@ -14,13 +14,13 @@ from src.parser.agent import (
     normalize_packet,
     validate_packet,
 )
-from src.advisor.sections.ats_keyword_gaps import build_ats_keyword_gaps_section
-from src.advisor.sections.general_advice import build_general_advice_section
-from src.advisor.sections.interview_prep import build_interview_prep_section
-from src.advisor.sections.portfolio_suggestions import build_portfolio_suggestions_section
-from src.advisor.sections.job_titles import build_recommended_job_titles_section
-from src.advisor.sections.resume_recommendation import build_resume_recommendation_section
-from src.advisor.sections.skills import build_recommend_skills_section
+from src.advisor.sections.ats_keyword_gaps import render_ats_keyword_gaps_section
+from src.advisor.sections.general_advice import render_general_advice_section
+from src.advisor.sections.interview_prep import render_interview_prep_section
+from src.advisor.sections.portfolio_suggestions import render_portfolio_suggestions_section
+from src.advisor.sections.job_titles import render_recommended_job_titles_section
+from src.advisor.sections.resume_recommendation import render_resume_recommendation_section
+from src.advisor.sections.skills import render_recommend_skills_section
 from src.advisor.agent import _generate_recommendation_sections, generate_job_hunt_recommendations
 from src.tailor.agent import _score_item, build_allowlist, build_tailored_payload
 from src.main import calculate_compatibility_score, rebuild_from_job_packet, run
@@ -70,8 +70,7 @@ class JobParserAgentTests(unittest.TestCase):
                 return_value=[
                     "## General Advice and Summary",
                     "",
-                    "- Summary: Keep the resume focused on backend work.",
-                    "- Advice: Lead with impact and mirror packet keywords.",
+                    "Summary: Keep the resume focused on backend work. Advice: Lead with impact and mirror packet keywords.",
                     "",
                     "## Skills",
                     "",
@@ -212,7 +211,7 @@ class JobParserAgentTests(unittest.TestCase):
             self.assertIn("| Kubernetes | 1 | 0 | 1 |", recommendations_text)
             self.assertIn("Kubernetes", recommendations_text)
 
-    def test_advisor_section_builders_return_expected_tables(self):
+    def test_advisor_section_renderers_return_expected_tables(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             modules_dir = Path(tmpdir) / "modules"
             modules_dir.mkdir(parents=True, exist_ok=True)
@@ -221,62 +220,35 @@ class JobParserAgentTests(unittest.TestCase):
             (modules_dir / "personalprojects.tex").write_text("Automation and tooling.", encoding="utf-8")
             (modules_dir / "aboutme.tex").write_text("Hands-on builder.", encoding="utf-8")
 
-            packets = [
-                {
-                    "job": {
-                        "title": "Senior Backend Engineer",
-                        "company": "Acme",
-                        "domain": "developer tools",
-                        "description": "Build APIs",
-                        "must_have": ["Python", "Kubernetes"],
-                        "nice_to_have": ["Terraform"],
-                        "responsibilities": ["Own reliability"],
+            titles = render_recommended_job_titles_section(
+                rows=[
+                    {
+                        "job_title": "Backend Engineer",
+                        "description": "Works on APIs",
+                        "rationale": "Matches API delivery",
+                        "compatibility_score": 5,
                     }
-                }
-            ]
-
-            with patch(
-                "src.advisor.sections.general_advice.post_openrouter_json",
-                return_value={
-                    "summary": "Focus on backend engineering and platform delivery.",
-                    "general_advice": [
-                        "Keep the summary targeted to the strongest role fit.",
-                        "Mirror key packet keywords in the top third of the resume.",
-                    ],
-                },
-            ), patch(
-                "src.advisor.sections.job_titles.post_openrouter_json",
-                return_value={
-                    "recommended_job_titles": [
-                        {"job_title": "Backend Engineer", "description": "Works on APIs", "rationale": "Matches API delivery"}
-                    ]
-                },
-            ), patch(
-                "src.advisor.sections.skills.post_openrouter_json",
-                return_value={"skills": ["Python", "Kubernetes", "Python"]},
-            ), patch(
-                "src.advisor.sections.resume_recommendation.post_openrouter_json",
-                return_value={
-                    "resume_recommendations": [
-                        {"area": "Summary", "recommendation": "Lead with backend impact", "reason": "Matches packet emphasis", "priority": 1}
-                    ]
-                },
-            ), patch(
-                "src.advisor.sections.interview_prep.post_openrouter_json",
-                return_value={"interview_prep": ["Practice backend ownership stories."]},
-            ), patch(
-                "src.advisor.sections.ats_keyword_gaps.post_openrouter_json",
-                return_value={"ats_keyword_gaps": ["Kubernetes: mention deployment ownership."]},
-            ), patch(
-                "src.advisor.sections.portfolio_suggestions.post_openrouter_json",
-                return_value={"portfolio_suggestions": ["Build a small deployment pipeline demo."]},
-            ):
-                titles = build_recommended_job_titles_section(resume_modules_dir=modules_dir, packets=packets, model_name="mock")
-                skills = build_recommend_skills_section(packets=packets, model_name="mock")
-                resume_recs = build_resume_recommendation_section(resume_modules_dir=modules_dir, packets=packets, model_name="mock")
-                interview_prep = build_interview_prep_section(resume_modules_dir=modules_dir, packets=packets, model_name="mock")
-                ats_gaps = build_ats_keyword_gaps_section(resume_modules_dir=modules_dir, packets=packets, model_name="mock")
-                portfolio = build_portfolio_suggestions_section(resume_modules_dir=modules_dir, packets=packets, model_name="mock")
+                ]
+            )
+            skills = render_recommend_skills_section(
+                skill_rows=[
+                    {"skill": "Kubernetes", "must_haves": 1, "good_to_haves": 0, "total": 1},
+                    {"skill": "Python", "must_haves": 1, "good_to_haves": 0, "total": 1},
+                ],
+                skills=["Kubernetes", "Python"],
+            )
+            resume_recs = render_resume_recommendation_section(
+                rows=[
+                    {"area": "Summary", "recommendation": "Lead with backend impact", "reason": "Matches packet emphasis", "priority": 1}
+                ]
+            )
+            interview_prep = render_interview_prep_section(items=["Practice backend ownership stories."])
+            ats_gaps = render_ats_keyword_gaps_section(items=["Kubernetes: mention deployment ownership."])
+            portfolio = render_portfolio_suggestions_section(items=["Build a small deployment pipeline demo."])
+            general = render_general_advice_section(
+                summary="Focus on backend engineering and platform delivery.",
+                general_advice="Keep the summary targeted to the strongest role fit. Mirror key packet keywords in the top third of the resume.",
+            )
 
             self.assertIn("## Recommended Job Titles", titles["lines"][0])
             self.assertIn("- Backend Engineer (score 5): Works on APIs. Matches API delivery", "\n".join(titles["lines"]))
@@ -290,6 +262,7 @@ class JobParserAgentTests(unittest.TestCase):
             self.assertIn("Kubernetes", "\n".join(ats_gaps["lines"]))
             self.assertIn("## Portfolio or Project Suggestions", portfolio["lines"][0])
             self.assertIn("deployment pipeline demo", "\n".join(portfolio["lines"]))
+            self.assertIn("## General Advice and Summary", general["lines"][0])
 
     def test_advisor_combines_openrouter_calls_into_single_request(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -318,10 +291,7 @@ class JobParserAgentTests(unittest.TestCase):
                 "src.advisor.agent._post_openrouter_json",
                 return_value={
                     "summary": "Focus on backend engineering and platform delivery.",
-                    "general_advice": [
-                        "Keep the summary targeted to the strongest role fit.",
-                        "Mirror key packet keywords in the top third of the resume.",
-                    ],
+                    "general_advice": "Keep the summary targeted to the strongest role fit. Mirror key packet keywords in the top third of the resume.",
                     "skills": ["Python", "Kubernetes", "Python"],
                     "recommended_job_titles": [
                         {"job_title": "Backend Engineer", "description": "Works on APIs", "rationale": "Matches API delivery"}
@@ -339,7 +309,10 @@ class JobParserAgentTests(unittest.TestCase):
             self.assertEqual(openrouter_mock.call_count, 1)
             self.assertLess(lines.index("## General Advice and Summary"), lines.index("## Skills"))
             self.assertLess(lines.index("## Skills"), lines.index("## Recommended Job Titles"))
-            self.assertIn("- Summary: Focus on backend engineering and platform delivery", "\n".join(lines))
+            self.assertIn(
+                "Summary: Focus on backend engineering and platform delivery.",
+                "\n".join(lines),
+            )
             self.assertIn("| Python | 1 | 0 | 1 |", "\n".join(lines))
 
     def test_category_boosts_raise_testing_bullet_score(self):
